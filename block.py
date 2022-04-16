@@ -8,3 +8,4 @@ class Block:
         self.parent = parent # ID of parent of this block
         self.txns = txns # List of Txns (with coinbase as last entry)
         self.broadcastTime = broadcastTime # Time at which block was mined and broadcasted
+        self.accepted=False

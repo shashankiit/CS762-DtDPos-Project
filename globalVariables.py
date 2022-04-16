@@ -7,10 +7,13 @@ unique = count() # the event id, used for distinguishing between events which oc
 number_of_peers = 20 # number of peer nodes in the network
 roundNumBlocks = 50
 numWitnessNodes = 10
+witnessNodes = []
 peerSleepBeta = 0.2 # mean of interarrival time of transactions
 meanT_k = [10 for i in range(number_of_peers)]
 loggingTxn = False
 loggingBlock = False
+block_Votes = 0
+
 
 # Do DFS on a undirected graph given as adjacency list
 def DFS(v, G, visited):

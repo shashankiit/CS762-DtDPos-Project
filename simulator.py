@@ -5,10 +5,12 @@ from visulaize import drawGraph, plotPeerGraph, graphFromBlockTree, getNodeLabel
 import os, shutil
 
 if __name__ == '__main__':
-
-    # Everyone starts mining on empty block
+    timestamp = 0
+    # Initial Election Cycle
+    votes = np.zeros((number_of_peers,))
     for peer in nodeList:
-        pq.put((0, next(unique), GenerateBlock(0, peer.id)))
+        votes[peer.giveVote()] += peer.allBalances[peer.id]
+    witnessNodes = np.argsort(votes)[-numWitnessNodes:]  
     
     # Everyone starts generating transactions
     for peer in nodeList:
@@ -16,18 +18,60 @@ if __name__ == '__main__':
         pids = list(range(len(nodeList)))
         pids.remove(peer.id)
         peer2ID = nodeList[rng.choice(pids)].id
-        
+
         # amount (int) can be from 0 (inclusive) to the balance of that peer (inclusive) in the longest chain stored in the peer
-        amount = rng.integers(0,peer.allBalances[peer.id]+1) if peer.allBalances[peer.id]>0 else 0
+        amount = rng.integers(0, peer.allBalances[peer.id]+1) if peer.allBalances[peer.id] > 0 else 0
         pq.put((0, next(unique), GenerateTransaction(0, peer.id, peer2ID, amount)))
     
-    # the main loop, fetch events from queue and process them
+    # Witness nodes start generating blocks
+    curr_cycle_blocks = []
+    BlockGenIdx = 0    
+    for i in range(roundNumBlocks):
+        block_Votes=0
+        pq.put((0, next(unique), GenerateBlock(timestamp, witnessNodes[BlockGenIdx])))
+        Block_under_vote = BlkID-1
+        endtime = timestamp + 20
+        # the main loop, fetch events from queue and process them
+        while True:
+            time, dummy, e = pq.get()
+            e.process()
+            if time > endtime:
+                break
+        
+        curr_block = witnessNodes[BlockGenIdx].blocktree[Block_under_vote]
+        curr_cycle_blocks.append(curr_block)
+        
+        if block_Votes >= numWitnessNodes*0.5:
+            curr_block.accepted = True
+
+        BlockGenIdx+=1
+    # Calculate local trust values
+    sat = np.zeros((number_of_peers,number_of_peers))
+    unsat = np.zeros((number_of_peers, number_of_peers))
+    for block in curr_cycle_blocks:
+        for txn in block.txn[:-1]:
+            tmp = txn.split()
+            sender, reciever, amount = int(tmp[1]), int(tmp[3]), int(tmp[4])
+            if reciever in nodeList[sender].neighbors:
+                if block.accepted:
+                    sat[sender,reciever]+=1
+                else:
+                    unsat[sender,reciever]+=1
+    
+    c = np.clip(sat - unsat,0)
+    c = c/np.sum(c,axis=1,keepdims=True)
+    m = c 
     while True:
-        # If all peers have atleast 100 blocks in their blocktree, end the simulation
-        if all([len(peer.blocktree)>=100 for peer in nodeList]):
+        m1 = np.matmul(m,m)
+        new_entries = np.fill_diagonal(m==0,False)
+        m[new_entries] = m1[new_entries]
+        if all(new_entries) == False:
             break
-        e = pq.get()[2]
-        e.process()
+        if np.sum(m1[new_entries]) == 0:
+            break
+    global_trust_values = m.T@global_trust_values
+    
+    
     
     # Remove previous outputs if they exist
     if os.path.exists('output'):

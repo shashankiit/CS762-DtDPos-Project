@@ -12,11 +12,11 @@ class Peer:
         self.invalidTxnProb = 0.1
         self.localTrustValues = [0 for i in range(number_of_peers)]
 
-        self.numValidTxns = [0 for i in range(number_of_peers)]
-        self.numInvalidTxns = [0 for i in range(number_of_peers)]
+        # self.numValidTxns = [0 for i in range(number_of_peers)]
+        # self.numInvalidTxns = [0 for i in range(number_of_peers)]
         
         # Each node maintains balances of each peer
-        self.allBalances = [0 for id in range(number_of_peers)]
+        self.allBalances = [10 for id in range(number_of_peers)]
 
         # Dictionary of the form txnID: (usedFlag, txn), where usedFlag is 1 if txn is used in the longest 
         # chain of the block and 0 if it's not
@@ -33,6 +33,17 @@ class Peer:
         # parentBlkID: [(Block_1, arrivalTime_1), (Block_2, arrivalTime_2), ...]
         self.pendingBlocks = {}
     
+    def giveVote():
+        r = rng.random()
+        sum_gt = sum(global_trust_values)
+        p_gt, vote_id = 0, 0
+        for i in range(len(global_trust_values)):
+            p_gt += global_trust_values[i]/sum_gt
+            if r <= p_gt:
+                vote_id = i
+                break
+        return vote_id
+
     # Given list of txns in a block, update balances stored by the peer
     def updateBalances(self, txns):
         for txn in txns[:-1]:

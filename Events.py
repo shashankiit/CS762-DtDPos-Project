@@ -89,9 +89,10 @@ class ReceiveTransaction():
 
 # Event for starting mining by a peer
 class GenerateBlock():
-    def __init__(self, time, peerID):
+    def __init__(self, time, peerID,blk_parent):
         self.time = time
         self.peerID = peerID
+        self.blk_parent=blk_parent
     
     def process(self):
         peer = nodeList[self.peerID]
@@ -99,36 +100,36 @@ class GenerateBlock():
         verifiedTxns = [] # The selected txns to be included in the block are stored in this list in order
         
         # malicious peer will try to include invalid txns in block
-        if peer.isMalicious:
-            # Add 1 used txn in block
-            addUsedTxn = True
-            for txnID, val in peer.txnpool.items():
-                if addUsedTxn and val[0] == 1:
-                    verifiedTxns.append(val[1])
-                    addUsedTxn = False
-                elif val[0] == 0:
-                    verifiedTxns.append(val[1]) # Do not verify unused txn and just include it
-                if len(verifiedTxns) >= 1024: # Do not include more than 1024 txns (max allowed size is 1MB)
-                    break
-        else:
-            for txnID, val in peer.txnpool.items():
-                if val[0] == 0: # If txn is used in longest chain, skip it. Otherwise try to include it
-                    txn = val[1]
-                    tmp = txn.split()
-                    sender, reciever, amount = int(tmp[1]), int(tmp[3]), int(tmp[4])
-                    # If txn violates this condition, skip it. Otherwise add it to the list
-                    if sender >= 0 and sender < number_of_peers and reciever >=0 and reciever < number_of_peers and amount >=0 and balances[sender] >= amount:
-                        balances[sender] -= amount
-                        balances[reciever] += amount
-                        verifiedTxns.append(txn)
-                if len(verifiedTxns) >= 1024: # Do not include more than 1024 txns (max allowed size is 1MB)
-                    break
+        # if peer.isMalicious:
+        #     # Add 1 used txn in block
+        #     addUsedTxn = True
+        #     for txnID, val in peer.txnpool.items():
+        #         if addUsedTxn and val[0] == 1:
+        #             verifiedTxns.append(val[1])
+        #             addUsedTxn = False
+        #         elif val[0] == 0:
+        #             verifiedTxns.append(val[1]) # Do not verify unused txn and just include it
+        #         if len(verifiedTxns) >= 1024: # Do not include more than 1024 txns (max allowed size is 1MB)
+        #             break
+        # else:
+        for txnID, val in peer.txnpool.items():
+            if val[0] == 0: # If txn is used in longest chain, skip it. Otherwise try to include it
+                txn = val[1]
+                # tmp = txn.split()
+                # sender, reciever, amount = int(tmp[1]), int(tmp[3]), int(tmp[4])
+                # If txn violates this condition, skip it. Otherwise add it to the list
+                # if sender >= 0 and sender < number_of_peers and reciever >=0 and reciever < number_of_peers and amount >=0 and balances[sender] >= amount:
+                #     balances[sender] -= amount
+                #     balances[reciever] += amount
+                verifiedTxns.append(txn)
+            if len(verifiedTxns) >= 1024: # Do not include more than 1024 txns (max allowed size is 1MB)
+                break
         
-        T_k = rng.exponential(meanT_k[peer.id]) # Get mining time from exp. distribution
+        # T_k = rng.exponential(meanT_k[peer.id]) # Get mining time from exp. distribution
         # Block is generated here and it's ID is also fixed here. If longest chain changes during mining, this block 
         # will be discarded. So in the final blocktree we will se some block IDs missing
-        broadcastTime = self.time + T_k
-        miningBlock = Block(peer.longestChainLeaf, verifiedTxns, broadcastTime)
+        broadcastTime = self.time
+        miningBlock = Block(self.blk_parent, verifiedTxns, broadcastTime)
 
         # As ths block will be mined at self.time + T_k, we pass peerID and senderID the same value of self.peerID
         # to identify this as mining completed event
@@ -155,27 +156,27 @@ class ReceiveBlock():
         elif self.peerID == self.senderID:
             # if longest chain hasn't changed since starting the mining, meaning that the parent of the mined block is
             # the same as leaf of longest chain, then we have successfully mined a block. Otherwise we discard it
-            if self.block.parent == peer.longestChainLeaf:
-                if loggingBlock:
-                    fout.write(f"Time = {self.time} | Block {self.block.id} Mined by Peer {self.peerID}\n") # Write event to log file
-                
-                coinbaseTxn = f"{TXNID}: {self.peerID} mines 50 coins" # generate coinbase txn for this block
-                TXNID += 1 # increment TXNID as new txn is generated
-                self.block.txns.append(coinbaseTxn) # add coinbase at the end of block txns
-                
-                # mark the txns present in this block as used
-                for txn in self.block.txns[:-1]:
-                    peer.txnpool[int(txn.split(":")[0])] = (1, txn)
-                
-                peer.blocktree[self.block.id] = (self.block, self.time) # Add block to blocktree of peer
-                peer.longestChainLeaf = self.block.id # update longest chain leaf
-                peer.longestChainLength += 1 # increment longest chain length
-                peer.updateBalances(self.block.txns) # update balances of peers as new txns are included
-                
-                broadcastBlockToNeighbors(self.time, self.peerID, self.block)
-                
-                # Start Mining again
-                pq.put((self.time, next(unique), GenerateBlock(self.time, self.peerID)))
+            # if self.block.parent == peer.longestChainLeaf:
+            if loggingBlock:
+                fout.write(f"Time = {self.time} | Block {self.block.id} Mined by Peer {self.peerID}\n") # Write event to log file
+            
+            coinbaseTxn = f"{TXNID}: {self.peerID} mines 50 coins" # generate coinbase txn for this block
+            TXNID += 1 # increment TXNID as new txn is generated
+            self.block.txns.append(coinbaseTxn) # add coinbase at the end of block txns
+            
+            # mark the txns present in this block as used
+            for txn in self.block.txns[:-1]:
+                peer.txnpool[int(txn.split(":")[0])] = (1, txn)
+            
+            peer.blocktree[self.block.id] = (self.block, self.time) # Add block to blocktree of peer
+            peer.longestChainLeaf = self.block.id # update longest chain leaf
+            # peer.longestChainLength += 1 # increment longest chain length
+            # peer.updateBalances(self.block.txns) # update balances of peers as new txns are included
+            
+            broadcastBlockToNeighbors(self.time, self.peerID, self.block)
+            
+            # Start Mining again
+            # pq.put((self.time, next(unique), GenerateBlock(self.time, self.peerID)))
         
         else: # If self.senderID is different from self.peerID, this means we have received a block from someone else
             
