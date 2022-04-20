@@ -8,6 +8,7 @@ number_of_peers = 20 # number of peer nodes in the network
 roundNumBlocks = 50 # number of block per election cycle
 numWitnessNodes = 10 # number of witness nodes per election cycle
 witnessNodes = [] # set of witness nodes
+numElectionCycles = 5
 peerSleepBeta = 0.2 # mean of interarrival time of transactions
 timeforVote = 20 # Per block in election cycle
 parNextBlock = None # Parent of next block to be generated

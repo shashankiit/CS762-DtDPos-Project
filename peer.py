@@ -33,7 +33,7 @@ class Peer:
         # parentBlkID: [(Block_1, arrivalTime_1), (Block_2, arrivalTime_2), ...]
         self.pendingBlocks = {}
     
-    def giveVote():
+    def giveVote(self):
         r = rng.random()
         sum_gt = sum(global_trust_values)
         p_gt, vote_id = 0, 0
