@@ -1,6 +1,6 @@
 from globalVariables import *
 from peer import Peer
-from block import *
+from block import BlkID
 from Events import GenerateTransaction, GenerateBlock
 from visulaize import drawGraph, plotPeerGraph, graphFromBlockTree, getNodeLabels
 import os, shutil
@@ -75,7 +75,7 @@ if __name__ == '__main__':
         m[new_entries] = m1[new_entries]
         if any(new_entries) == False:
             break
-        if np.sum(m1[new_entries]) == 0:
+        if np.all(m1[new_entries] == 0):
             break
     global_trust_values = m.T@global_trust_values
     
@@ -159,7 +159,7 @@ if __name__ == '__main__':
         meanBL = np.mean(branchLengths) if len(branchLengths) > 0 else 0 # average branch length for a peer
         peerBranchLength.append(meanBL)
 
-        print(f"Peer {peer.id} | {peer.label} | meanT_k = {meanT_k[peer.id]} | Ratio = {ratio} | Avg. branch length = {meanBL}")
+        # print(f"Peer {peer.id} | {peer.label} | meanT_k = {meanT_k[peer.id]} | Ratio = {ratio} | Avg. branch length = {meanBL}")
 
     print("Average Ratio for all Peers = ", np.mean(peerRatios))
     print("Average Branch Length for all Peers = ", np.mean(peerBranchLength))

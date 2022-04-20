@@ -180,20 +180,21 @@ class ReceiveBlock():
             # Start Mining again
             # pq.put((self.time, next(unique), GenerateBlock(self.time, self.peerID)))
         
-        else: # If self.senderID is different from self.peerID, this means we have received a block from someone else
-            
-            # Try to add block in blocktree. Returns 0 if block is discarded, 1 if it is added in tree but does not change
-            # the longest chain, 2 if longest chain has changed and -1 if parent of block is not in blocktree
-            # Check if the current block is under voting. If yes then verify else 
+        else: 
+            # If self.senderID is different from self.peerID, this means we have received a block from someone else
+
+
+            # Try to add block in blocktree. Returns 0 if block is discarded, 1 if it is added in tree and 
+            # -1 if it is a pending block
             def addBlock(block, arrivalTime):
                 if block.id in peer.blocktree: # discard if block already in tree
                     return 0
                 # discard if block already in pending blocks
                 elif block.parent in peer.pendingBlocks and block.id in [x[0] for x in peer.pendingBlocks[block.parent]]:
                     return 0
-                # In this case the block can possibly be attached to some block other than longest chain leaf.
-                # IF parent of BLOCK is ALready accepted and the parent is not the longest chain leaf. 
 
+                # In this case the block can possibly be attached to some block other than leaf.
+                # Note parent is always accepted; Since somebody mined on it
                 # Covers both cases: block.parent == peer.longestChainLeaf and block.parent != peer.longestChainLeaf
                 elif block.parent in peer.blocktree:
                     
@@ -201,7 +202,7 @@ class ReceiveBlock():
                     assert(peer.blocktree[block.parent][0].accepted)
                     if peer.addBlock(block):
                         if loggingBlock:
-                            fout.write(f"Time = {self.time} | Block {block.id} added by Peer {self.peerID} in longest chain\n")
+                            fout.write(f"Time = {self.time} | Block {block.id} added by Peer {self.peerID} in Block Tree\n")
                         broadcastBlockToNeighbors(self.time, self.peerID, block) # broadcast block to neighbors
                         
                         # Voting by witnessNodes if block under vote
@@ -210,29 +211,9 @@ class ReceiveBlock():
                         return 2 # leaf has changed
                     else:
                         return 0 # verify block failed
-
-                    # If all checks have passed, the block will be added into the tree
-                    peer.blocktree[block.id] = (block, arrivalTime)
-                    broadcastBlockToNeighbors(self.time, self.peerID, block) # Broadcast block
-                    
-                    # Check if longest chain is changed. This happens if length of 'chain' is more than length of current
-                    # longest chain or length of chain is equal and broadcast time of the leaf of 'chain' (which is the 
-                    # new block) is less than broadcast time of current longest chain leaf
-                    leafBlock = peer.blocktree[peer.longestChainLeaf][0]
-                    if len(chain) > peer.longestChainLength or (len(chain) == peer.longestChainLength and block.broadcastTime < leafBlock.broadcastTime):
-                        # As longest chain has changed
-                        peer.allBalances = allBalances # update allBalances
-                        peer.txnpool = txnpool # update txnpool
-                        peer.longestChainLeaf = block.id # update longest chain leaf
-                        peer.longestChainLength = len(chain) # update longest chain length
-                        if loggingBlock:
-                            fout.write(f"Time = {self.time} | Block {block.id} added by Peer {self.peerID} changing longest chain\n")
-                        return 2 # as longest chain has changed, return 2
-                    if loggingBlock:
-                        fout.write(f"Time = {self.time} | Block {block.id} added by Peer {self.peerID} in tree\n")
-                    return 1 # this means longest chain did not change but block was added in blocktree, so return 1
                 
-                else: # If block.parent is not in blocktree, we add it to pending blocks
+                # If block.parent is not in blocktree, we add it to pending blocks
+                else:
                     if loggingBlock:
                         fout.write(f"Time = {self.time} | Block {block.id} added by Peer {self.peerID} in pending Blocks\n")
                     # If block.parent is a key in peer.pendingBlocks, we append it to the value otherwise we create and new
@@ -254,26 +235,19 @@ class ReceiveBlock():
             # receive a new block we need to check if any pending blocks has it as parent, then we try to add those blocks,
             # and if successful we try to add their children in pending blocks
 
-            def BlockDFS(block, arrivalTime):
+            def addRecursive(block, arrivalTime):
                 retval = addBlock(block, arrivalTime) # Try to add block in blocktree
                 # If block is discarded, remove children of this block in pendingBlocks in a DFS manner
                 if retval == 0:
                     if loggingBlock:
                         fout.write(f"Time = {self.time} | Block {block.id} discarded by Peer {self.peerID}\n")
                     removePendingChildren(block.id)
-                elif retval != -1: # Proceed only if block is added in tree
-                    # If block changes the longest chain, add 1 to runMine to indicate that we have to start mining again
-                    if retval==2: 
-                        runMine.append(1)
+                elif retval == 1: # Proceed only if block is added in tree
                     # if the added block is parent to some blocks in pending blocks, we start DFS on those blocks
                     if block.id in peer.pendingBlocks: 
                         for pendingBlock, pendingTime in peer.pendingBlocks[block.id]:
-                            BlockDFS(pendingBlock, pendingTime)
+                            addRecursive(pendingBlock, pendingTime)
                         # As these blocks have their parent in the tree, remove them from pending blocks
                         peer.pendingBlocks.pop(block.id)
             
-            removePendingChildren(self.block)
-            BlockDFS(self.block, self.time) # start DFS from received block
-            if len(runMine) > 0: # If longest chain is changed, start mining again
-                pq.put((self.time, next(unique), GenerateBlock(self.time, self.peerID)))
-            
+            addRecursive(self.block, self.time) # add recursively from received block
