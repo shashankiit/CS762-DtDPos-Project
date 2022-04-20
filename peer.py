@@ -54,28 +54,67 @@ class Peer:
         # Last Txn is coinbase so updated seperately
         self.allBalances[int(txns[-1].split()[1])] += 50
     
-    # If block is attaching to the leaf of longest chain, it can be verified using this function
-    def verifyBlock(self, block):
-        balances = self.allBalances[:] # Create a copy so original values do not get changed if block is invalid
+    # Verify the block if block.parent is accepted; adds the block in the chain
+    def AddBlock(self, block, arrivalTime):
+        assert(self.blocktree[block.parent][0].accepted)
+
+        allBalances = self.allBalances[:] # Create a copy so original values do not get changed if block is invalid
         txnpool = self.txnpool.copy() # Create a copy so original values do not get changed if block is invalid
-        
-        # No need to verify coinbase as it only increments balance of a peer
-        for txn in block.txns[:-1]:
-            tmp = txn.split()
-            txnID, sender, receiver, amount = int(tmp[0][:-1]), int(tmp[1]), int(tmp[3]), int(tmp[4])
-            if sender < 0 or sender >= number_of_peers or receiver < 0 or receiver >= number_of_peers or txnID < 0 or amount < 0:
-                return False
-            # if txn is already present in longest chain, discard the block
-            elif txnID in txnpool and txnpool[txnID][0] == 1:
-                return False
-            # if sender is trying to pay more than balance, discard the block
-            elif balances[sender] < amount:
-                return False
-            else:
-                txnpool[txnID] = (1, txn) # mark txn as used in txnpool
-                balances[sender] -= amount # deduct amount from sender's balance
-                balances[receiver] += amount # add amount in receiver's balance
-        return True
+
+        if block.parent != self.longestChainLeaf:
+            chain = [] # This will store the chain
+            currBlock = block.parent
+            while currBlock.id != 0: # run loop until we reach genesis block
+                chain.append(currBlock) # add block to chain
+                currBlock = peer.blocktree[currBlock.parent][0] # set currBlock to parent of currBlock
+            chain = list(reversed(chain)) # we need to reverse it as we were adding child earlier than parent
+            
+            for txnID in txnpool:
+                txnpool[txnID] = (0, txnpool[txnID][1]) # mark all txns as unused
+            allBalances = [0 for id in range(number_of_peers)] # set all balances to 0
+            # Now we traverse the chain and modify txnpool and allBalances as we go on to verify the new block
+            for anc_block in chain:
+                for txn in anc_block.txns[:-1]: # For all txns except coinbase in block
+                    tmp = txn.split()
+                    txnID, sender, receiver, amount = int(tmp[0][:-1]), int(tmp[1]), int(tmp[3]), int(tmp[4])
+                    txnpool[txnID] = (1, txn) # mark txn as used
+                    allBalances[sender] -= amount # update sender balance
+                    allBalances[receiver] += amount # update receiver balance
+                    
+                # Handle coinbase seperately, no need to add coinbase in txnpool
+                tmp = anc_block.txns[-1].split()
+                txnID, receiver = int(tmp[0][:-1]), int(tmp[1])
+                allBalances[receiver] += 50
+            
+
+            # No need to verify coinbase as it only increments balance of a peer
+            for txn in block.txns[:-1]:
+                tmp = txn.split()
+                txnID, sender, receiver, amount = int(tmp[0][:-1]), int(tmp[1]), int(tmp[3]), int(tmp[4])
+                if sender < 0 or sender >= number_of_peers or receiver < 0 or receiver >= number_of_peers or txnID < 0 or amount < 0:
+                    return False
+                # if txn is already present in current chain, discard the block
+                elif txnID in txnpool and txnpool[txnID][0] == 1:
+                    return False
+                # if sender is trying to pay more than balance, discard the block
+                elif allBalances[sender] < amount:
+                    return False
+                else:
+                    txnpool[txnID] = (1, txn) # mark txn as used in txnpool
+                    allBalances[sender] -= amount # deduct amount from sender's balance
+                    allBalances[receiver] += amount # add amount in receiver's balance
+            
+            # Handle coinbase seperately
+            tmp = block.txns[-1].split()
+            txnID, receiver = int(tmp[0][:-1]), int(tmp[1])
+            allBalances[receiver] += 50
+
+            self.blocktree[block.id] = (block, arrivalTime) # Add block in blocktree
+            self.allBalances = allBalances # update peer.allBalances
+            self.txnpool = txnpool
+            self.longestChainLeaf = block.id # Update longest chain leaf
+            return True
+
 
 # Add peers to nodeList
 for p in range(number_of_peers):

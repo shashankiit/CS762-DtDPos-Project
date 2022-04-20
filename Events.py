@@ -1,5 +1,6 @@
+from os import remove
 import numpy as np
-from block import Block
+from block import BlkID, Block
 from globalVariables import *
 
 rho_ij = 0.01 + (0.5 - 0.01)*rng.random() # Value of speed of light propagation delay, chosen at beginning of simulation
@@ -15,8 +16,9 @@ def broadcastTxnToNeighbors(time, peerID, txn):
         c_ij = 100
         d_ij = rng.exponential(96/(1024*c_ij))
         latency = rho_ij + 8/(1024*c_ij) + d_ij
-        
-        pq.put((time + latency, next(unique), ReceiveTransaction(time + latency, neighbor.id, txn)))
+
+        recTime = time + latency 
+        pq.put((recTime, next(unique), ReceiveTransaction(recTime, neighbor.id, txn)))
 
 # Broadcast block to neighbors of a peer
 def broadcastBlockToNeighbors(time, peerID, block):
@@ -73,7 +75,7 @@ class GenerateTransaction():
 class ReceiveTransaction():
     def __init__(self, time, peerID, txn):
         self.time = time
-        self.peerID = peerID
+        self.peerID = peerID # receiver
         self.txn = txn
 
     def process(self):
@@ -89,10 +91,10 @@ class ReceiveTransaction():
 
 # Event for starting mining by a peer
 class GenerateBlock():
-    def __init__(self, time, peerID,blk_parent):
+    def __init__(self, time, peerID, blk_parent):
         self.time = time
         self.peerID = peerID
-        self.blk_parent=blk_parent
+        self.blk_parent = blk_parent
     
     def process(self):
         peer = nodeList[self.peerID]
@@ -122,7 +124,7 @@ class GenerateBlock():
                 #     balances[sender] -= amount
                 #     balances[reciever] += amount
                 verifiedTxns.append(txn)
-            if len(verifiedTxns) >= 1024: # Do not include more than 1024 txns (max allowed size is 1MB)
+            if len(verifiedTxns) >= 1023: # Do not include more than 1024 txns (max allowed size is 1MB)
                 break
         
         # T_k = rng.exponential(meanT_k[peer.id]) # Get mining time from exp. distribution
@@ -147,7 +149,7 @@ class ReceiveBlock():
     def process(self):
         global TXNID
         peer = nodeList[self.peerID]
-        if self.block.id in peer.blocktree: # If block already present in tree, discard it
+        if self.block.id in peer.blocktree: # If block already present in tree, discard it loopless forwarding
             return
         # if block already present in pending blocks, discard it
         elif self.block.parent in peer.pendingBlocks and self.block.id in [x[0] for x in peer.pendingBlocks[self.block.parent]]:
@@ -171,7 +173,7 @@ class ReceiveBlock():
             peer.blocktree[self.block.id] = (self.block, self.time) # Add block to blocktree of peer
             peer.longestChainLeaf = self.block.id # update longest chain leaf
             # peer.longestChainLength += 1 # increment longest chain length
-            # peer.updateBalances(self.block.txns) # update balances of peers as new txns are included
+            peer.updateBalances(self.block.txns) # TODO: Recheck update balances of peers as new txns are included
             
             broadcastBlockToNeighbors(self.time, self.peerID, self.block)
             
@@ -182,64 +184,33 @@ class ReceiveBlock():
             
             # Try to add block in blocktree. Returns 0 if block is discarded, 1 if it is added in tree but does not change
             # the longest chain, 2 if longest chain has changed and -1 if parent of block is not in blocktree
+            # Check if the current block is under voting. If yes then verify else 
             def addBlock(block, arrivalTime):
                 if block.id in peer.blocktree: # discard if block already in tree
                     return 0
                 # discard if block already in pending blocks
                 elif block.parent in peer.pendingBlocks and block.id in [x[0] for x in peer.pendingBlocks[block.parent]]:
                     return 0
-                # In this case we do not need to check from genesis block as we have maintained peer.allBalances for longest chain
-                elif block.parent == peer.longestChainLeaf:
-                    if peer.verifyBlock(block): # We can use this function in this case
+                # In this case the block can possibly be attached to some block other than longest chain leaf.
+                # IF parent of BLOCK is ALready accepted and the parent is not the longest chain leaf. 
+
+                # Covers both cases: block.parent == peer.longestChainLeaf and block.parent != peer.longestChainLeaf
+                elif block.parent in peer.blocktree:
+                    
+                    # Can also be rejected
+                    assert(peer.blocktree[block.parent][0].accepted)
+                    if peer.addBlock(block):
                         if loggingBlock:
                             fout.write(f"Time = {self.time} | Block {block.id} added by Peer {self.peerID} in longest chain\n")
-                        # Update txnpool of peer using txns (except coinbase) in block
-                        for txn in block.txns[:-1]:
-                            peer.txnpool[int(txn.split(":")[0])] = (1, txn)
-                        peer.blocktree[block.id] = (block, arrivalTime) # Add block in blocktree
-                        peer.longestChainLeaf = block.id # Update longest chain leaf
-                        peer.longestChainLength += 1 # increment longest chain length
-                        peer.updateBalances(block.txns) # update peer.allBalances
                         broadcastBlockToNeighbors(self.time, self.peerID, block) # broadcast block to neighbors
-                        return 2 # as longest chain has changed, return 2
+                        
+                        # Voting by witnessNodes if block under vote
+                        if peer.id in witnessNodes and block.id == BlkID:
+                            block_Votes += 1
+                        return 2 # leaf has changed
                     else:
-                        return 0
-                # In this case the block can possibly be attached to some block other than longest chain leaf.
-                elif block.parent in peer.blocktree:
-                    # Now to check this block we need to get all the blocks from genesis to this one
-                    chain = [] # This will store the chain
-                    currBlock = block
-                    while currBlock.id != 0: # run loop until we reach genesis block
-                        chain.append(currBlock) # add block to chain
-                        currBlock = peer.blocktree[currBlock.parent][0] # set currBlock to parent of currBlock
-                    chain = list(reversed(chain)) # we need to reverse it as we were adding child earlier than parent
-                    
-                    txnpool = peer.txnpool.copy() # copy txnpool for verification
-                    for txnID in txnpool:
-                        txnpool[txnID] = (0, txnpool[txnID][1]) # mark all txns as unused
-                    allBalances = [0 for id in range(number_of_peers)] # set all balances to 0
-                    # Now we traverse the chain and modify txnpool and allBalances as we go on to verify the new block
-                    for block in chain:
-                        for txn in block.txns[:-1]: # For all txns except coinbase in block
-                            tmp = txn.split()
-                            txnID, sender, receiver, amount = int(tmp[0][:-1]), int(tmp[1]), int(tmp[3]), int(tmp[4])
-                            if sender < 0 or sender >= number_of_peers or receiver < 0 or receiver >= number_of_peers or txnID < 0 or amount < 0:
-                                return 0
-                            # If we have previously used a transaction in the block, discard the block
-                            elif txnID in txnpool and txnpool[txnID][0]==1:
-                                return 0
-                            # if balance of sender is less than amount, discard the block
-                            elif allBalances[sender] < amount:
-                                return 0
-                            else:
-                                txnpool[txnID] = (1, txn) # mark txn as used
-                                allBalances[sender] -= amount # update sender balance
-                                allBalances[receiver] += amount # update receiver balance
-                        # Handle coinbase seperately, no need to add coinbase in txnpool
-                        tmp = block.txns[-1].split()
-                        txnID, receiver = int(tmp[0][:-1]), int(tmp[1])
-                        allBalances[receiver] += 50
-                    
+                        return 0 # verify block failed
+
                     # If all checks have passed, the block will be added into the tree
                     peer.blocktree[block.id] = (block, arrivalTime)
                     broadcastBlockToNeighbors(self.time, self.peerID, block) # Broadcast block
@@ -282,6 +253,7 @@ class ReceiveBlock():
             # To add pending blocks to block tree, we need to traverse self.pendingBlocks in a DFS manner, because when we 
             # receive a new block we need to check if any pending blocks has it as parent, then we try to add those blocks,
             # and if successful we try to add their children in pending blocks
+
             def BlockDFS(block, arrivalTime):
                 retval = addBlock(block, arrivalTime) # Try to add block in blocktree
                 # If block is discarded, remove children of this block in pendingBlocks in a DFS manner
@@ -300,6 +272,7 @@ class ReceiveBlock():
                         # As these blocks have their parent in the tree, remove them from pending blocks
                         peer.pendingBlocks.pop(block.id)
             
+            removePendingChildren(self.block)
             BlockDFS(self.block, self.time) # start DFS from received block
             if len(runMine) > 0: # If longest chain is changed, start mining again
                 pq.put((self.time, next(unique), GenerateBlock(self.time, self.peerID)))

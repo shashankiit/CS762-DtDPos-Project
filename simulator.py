@@ -1,18 +1,23 @@
 from globalVariables import *
 from peer import Peer
+from block import *
 from Events import GenerateTransaction, GenerateBlock
 from visulaize import drawGraph, plotPeerGraph, graphFromBlockTree, getNodeLabels
 import os, shutil
 
 if __name__ == '__main__':
     timestamp = 0
+    parNextBlock = 0
+
+    # TODO: Update Timestamp
+    # TODO: Multiple Election Cycles
     # Initial Election Cycle
     votes = np.zeros((number_of_peers,))
     for peer in nodeList:
-        votes[peer.giveVote()] += peer.allBalances[peer.id]
+        votes[peer.giveVote()] += peer.allBalances[peer.id] # Vote is proportional to stake
     witnessNodes = np.argsort(votes)[-numWitnessNodes:]  
     
-    # Everyone starts generating transactions
+    # Everyone starts generating transactions [Outside loop]
     for peer in nodeList:
         # Randomly choose another peer to pay (cannot be itself)
         pids = list(range(len(nodeList)))
@@ -21,30 +26,33 @@ if __name__ == '__main__':
 
         # amount (int) can be from 0 (inclusive) to the balance of that peer (inclusive) in the longest chain stored in the peer
         amount = rng.integers(0, peer.allBalances[peer.id]+1) if peer.allBalances[peer.id] > 0 else 0
-        pq.put((0, next(unique), GenerateTransaction(0, peer.id, peer2ID, amount)))
+        pq.put((0, next(unique), GenerateTransaction(timestamp, peer.id, peer2ID, amount)))
     
     # Witness nodes start generating blocks
     curr_cycle_blocks = []
-    BlockGenIdx = 0    
+    BlockGenIdx = 0 # Index of witness node generating blocks  
     for i in range(roundNumBlocks):
         block_Votes=0
-        pq.put((0, next(unique), GenerateBlock(timestamp, witnessNodes[BlockGenIdx])))
-        Block_under_vote = BlkID-1
-        endtime = timestamp + 20
+        pq.put((0, next(unique), GenerateBlock(timestamp, witnessNodes[BlockGenIdx], parNextBlock)))
+        Block_under_vote = BlkID
+        endtime = timestamp + timeforVote
         # the main loop, fetch events from queue and process them
         while True:
             time, dummy, e = pq.get()
-            e.process()
             if time > endtime:
+                pq.put((time, next(unique), e))
                 break
+            e.process()
         
-        curr_block = witnessNodes[BlockGenIdx].blocktree[Block_under_vote]
+        curr_block = witnessNodes[BlockGenIdx].blocktree[Block_under_vote][0]
         curr_cycle_blocks.append(curr_block)
         
         if block_Votes >= numWitnessNodes*0.5:
             curr_block.accepted = True
+            parNextBlock = Block_under_vote
 
-        BlockGenIdx+=1
+        BlockGenIdx = (BlockGenIdx + 1) % witnessNodes
+
     # Calculate local trust values
     sat = np.zeros((number_of_peers,number_of_peers))
     unsat = np.zeros((number_of_peers, number_of_peers))
@@ -65,14 +73,15 @@ if __name__ == '__main__':
         m1 = np.matmul(m,m)
         new_entries = np.fill_diagonal(m==0,False)
         m[new_entries] = m1[new_entries]
-        if all(new_entries) == False:
+        if any(new_entries) == False:
             break
         if np.sum(m1[new_entries]) == 0:
             break
     global_trust_values = m.T@global_trust_values
     
     
-    
+    # ---------------------
+    # TODO: Update Output
     # Remove previous outputs if they exist
     if os.path.exists('output'):
         shutil.rmtree('output')

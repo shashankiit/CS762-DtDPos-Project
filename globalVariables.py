@@ -5,15 +5,16 @@ from queue import PriorityQueue
 rng = np.random.default_rng(0) # seed for the simulation is specified here
 unique = count() # the event id, used for distinguishing between events which occur at the same time
 number_of_peers = 20 # number of peer nodes in the network
-roundNumBlocks = 50
-numWitnessNodes = 10
-witnessNodes = []
+roundNumBlocks = 50 # number of block per election cycle
+numWitnessNodes = 10 # number of witness nodes per election cycle
+witnessNodes = [] # set of witness nodes
 peerSleepBeta = 0.2 # mean of interarrival time of transactions
-meanT_k = [10 for i in range(number_of_peers)]
+timeforVote = 20 # Per block in election cycle
+parNextBlock = None # Parent of next block to be generated
+# meanT_k = [10 for i in range(number_of_peers)]
 loggingTxn = False
 loggingBlock = False
-block_Votes = 0
-
+block_Votes = 0 # votes for the current block in circulation
 
 # Do DFS on a undirected graph given as adjacency list
 def DFS(v, G, visited):
@@ -42,7 +43,7 @@ def generateRandomGraph(n):
         if isConnected(G, n):
             return G
 
-G = generateRandomGraph(number_of_peers)
+G = generateRandomGraph(number_of_peers) # Peer Graph
 nodeList = [] # Stores all the Peers
 global_trust_values = [] # Stores global trust values
 pq = PriorityQueue() # The Event Queue
