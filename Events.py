@@ -230,7 +230,6 @@ class ReceiveBlock():
                         removePendingChildren(pendingBlock.id)
                     peer.pendingBlocks.pop(blockID)
                     
-            runMine = [] # If this list is not empty, then self.peerID will start mining again
             # To add pending blocks to block tree, we need to traverse self.pendingBlocks in a DFS manner, because when we 
             # receive a new block we need to check if any pending blocks has it as parent, then we try to add those blocks,
             # and if successful we try to add their children in pending blocks
