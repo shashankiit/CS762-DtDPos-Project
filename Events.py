@@ -1,6 +1,6 @@
 from os import remove
 import numpy as np
-from block import BlkID, Block
+from block import Block
 from globalVariables import *
 
 TXNID = 0 # Incremented every time a txn is generated
@@ -93,7 +93,7 @@ class GenerateBlock(Event):
         
         broadcastTime = self.time # Instanteous block generation
         miningBlock = Block(self.blk_parent, verifiedTxns, broadcastTime)
-
+        print(f'Generate Block {self.peerID} {miningBlock.id}')
         # As ths block will be mined at self.time, we pass peerID and senderID the same value of self.peerID
         # to identify this as mining completed event
         pq.put((broadcastTime, next(unique), ReceiveBlock(broadcastTime, self.peerID, miningBlock, self.peerID)))
@@ -161,10 +161,10 @@ class ReceiveBlock(Event):
                     if peer.VerifyAddBlock(block, arrivalTime):
                         if loggingBlock:
                             fout.write(f"Time = {self.time} | Block {block.id} added by Peer {self.peerID} in Block Tree\n")
-                        peer.broadcastBlockToNeighbors(self.time, self.peerID, block) # broadcast block to neighbors
+                        peer.broadcastBlockToNeighbors(self.time, block) # broadcast block to neighbors
                         
                         # Voting by witnessNodes if block under vote
-                        if peer.id in witnessNodes and block.id == BlkID:
+                        if peer.id in witnessNodes and block.id == Block.BlkID:
                             block_Votes += 1
                         return 1 # leaf has changed
                     else:

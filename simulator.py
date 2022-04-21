@@ -1,13 +1,29 @@
+from torch import alpha_dropout
 from globalVariables import *
 from peer import Peer
-from block import BlkID
+from block import Block
 from events import GenerateTransaction, GenerateBlock, random_choice_except
 from visulaize import drawGraph, plotPeerGraph, graphFromBlockTree, getNodeLabels
 import os, shutil
+from blockchain import Blockchain
 
 if __name__ == '__main__':
+
+    # Genesis Block is included in the blocktree of every peer during initialization
+    # It is the first block being created, so it's ID is 0
+    print("Hello", Block.BlkID)
+    genesisBlock = Block(None, [], 0)
+    genesisBlock.accepted = True
+    print("Hello", Block.BlkID)
+    # Add peers to nodeList
+    for p in range(number_of_peers):
+        peer = Peer(p, G[p], genesisBlock)
+        nodeList.append(peer)
+        global_trust_values.append(1/number_of_peers)
+
     timestamp = 0
     parNextBlock = 0
+    BlockTree = Blockchain(0, genesisBlock) # Blockchain to keep track of nodes
 
     # Transaction generation by all nodes
     for sender in nodeList:
@@ -46,25 +62,31 @@ if __name__ == '__main__':
                 timestamp = time
                 e.process()
             
-            curr_block = nodeList[witnessID].blocktree[BlkID][0] # Extract the block under voting
+            curr_block = nodeList[witnessID].blocktree[Block.BlkID][0] # Extract the block under voting
             curr_cycle_blocks.append(curr_block)
             
             if block_Votes >= numWitnessNodes*0.5:
                 curr_block.accepted = True
-                parNextBlock = BlkID
+                parNextBlock = Block.BlkID
 
         # Calculate local trust values
         sat = np.zeros((number_of_peers, number_of_peers))
         unsat = np.zeros((number_of_peers, number_of_peers))
         for block in curr_cycle_blocks:
+            invalid_txns = BlockTree.VerifyAddBlock(block) # returns list of invalid txns
+
             for txn in block.txns[:-1]:
                 tmp = txn.split()
-                sender, reciever, amount = int(tmp[1]), int(tmp[3]), int(tmp[4])
-                if reciever in nodeList[sender].neighbors:
-                    if block.accepted:
-                        sat[sender,reciever] += 1
-                    else:
-                        unsat[sender,reciever] += 1
+                txnID, sender, receiver, amount = int(tmp[0][:-1]), int(tmp[1]), int(tmp[3]), int(tmp[4])
+                if receiver in nodeList[sender].neighbors:
+                    try:
+                        if  txnID in invalid_txns:
+                            sat[sender,receiver] += 1
+                        else:
+                            unsat[sender,receiver] += 1
+                    except Exception as e:
+                        print(e, txnID, invalid_txns)
+                        # txnID = alph
         
         s = np.maximum(sat - unsat, 0)
         with np.errstate(divide='ignore',invalid='ignore'):
