@@ -9,13 +9,14 @@ roundNumBlocks = 50 # number of block per election cycle
 numWitnessNodes = 10 # number of witness nodes per election cycle
 witnessNodes = [] # set of witness nodes
 numElectionCycles = 5
-peerSleepBeta = 0.2 # mean of interarrival time of transactions
+peerSleepBeta = 0.5 # mean of interarrival time of transactions
 timeforVote = 20 # Per block in election cycle
 parNextBlock = None # Parent of next block to be generated
 # meanT_k = [10 for i in range(number_of_peers)]
 loggingTxn = False
 loggingBlock = False
 block_Votes = 0 # votes for the current block in circulation
+rho_ij = 0.01 + (0.5 - 0.01)*rng.random() # Value of speed of light propagation delay, chosen at beginning of simulation
 
 # Do DFS on a undirected graph given as adjacency list
 def DFS(v, G, visited):

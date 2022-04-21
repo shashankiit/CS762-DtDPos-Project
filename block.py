@@ -1,4 +1,4 @@
-BlkID = 0 # This is incremented every time we attempt to create a block
+BlkID = -1 # This is incremented every time we attempt to create a block
 class Block:
     def __init__(self, parent, txns, broadcastTime):
         global BlkID
@@ -10,3 +10,4 @@ class Block:
         self.broadcastTime = broadcastTime # Time at which block was mined and broadcasted
         self.accepted=False  # Voting is succesful
         self.underVote = False # Voting for the block is underway
+        self.miningTime = None # Time when the block is mined

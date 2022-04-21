@@ -1,7 +1,7 @@
 from globalVariables import *
 from peer import Peer
 from block import BlkID
-from Events import GenerateTransaction, GenerateBlock
+from events import GenerateTransaction, GenerateBlock, random_choice_except
 from visulaize import drawGraph, plotPeerGraph, graphFromBlockTree, getNodeLabels
 import os, shutil
 
@@ -9,35 +9,36 @@ if __name__ == '__main__':
     timestamp = 0
     parNextBlock = 0
 
-    # TODO: Multiple Election Cycles
-    # Everyone starts generating transactions [Outside loop]
-    for peer in nodeList:
+    # Transaction generation by all nodes
+    for sender in nodeList:
         # Randomly choose another peer to pay (cannot be itself)
-        pids = list(range(len(nodeList)))
-        pids.remove(peer.id)
-        peer2ID = nodeList[rng.choice(pids)].id
+        receiverID = random_choice_except(0, number_of_peers, sender.id)
 
         # amount (int) can be from 0 (inclusive) to the balance of that peer (inclusive) in the longest chain stored in the peer
-        amount = rng.integers(0, peer.allBalances[peer.id]+1) if peer.allBalances[peer.id] > 0 else 0
-        pq.put((0, next(unique), GenerateTransaction(timestamp, peer.id, peer2ID, amount)))
+        amount = rng.integers(0, sender.getBalance()+1) if sender.getBalance() > 0 else 0
+        pq.put((0, next(unique), GenerateTransaction(timestamp, sender.id, receiverID, amount)))
     
+
+    # Conduct numElectionCycles for simulation
     for electionIdx in range(numElectionCycles):
+
         # Voting in current Election Cycle
         votes = np.zeros((number_of_peers,))
         for peer in nodeList:
-            votes[peer.giveVote()] += peer.allBalances[peer.id] # Vote is proportional to stake
-        witnessNodes = np.argsort(votes)[-numWitnessNodes:]  
+            votes[peer.giveVote()] += peer.getBalance() # Vote is proportional to stake
+        witnessNodes = np.argsort(votes)[-numWitnessNodes:] # Choose witnessNodes
         
         # Witness nodes start generating blocks
         curr_cycle_blocks = []
-        BlockGenIdx = 0 # Index of witness node generating blocks  
+        
         for i in range(roundNumBlocks):
-            block_Votes=0
-            pq.put((timestamp, next(unique), GenerateBlock(timestamp, witnessNodes[BlockGenIdx], parNextBlock)))
-            Block_under_vote = BlkID
-            endtime = timestamp + timeforVote
-            # the main loop, fetch events from queue and process them
-            while True:
+            block_Votes = 0 # Number of votes for block to be generated
+            witnessID = witnessNodes[i%numWitnessNodes] # ID of the witness node generating blocks
+            pq.put((timestamp, next(unique), GenerateBlock(timestamp, witnessID, parNextBlock)))
+            
+            endtime = timestamp + timeforVote # Time for voting
+            # Fetch events from queue and process them
+            while not pq.empty():
                 time, dummy, e = pq.get()
                 if time > endtime:
                     pq.put((time, next(unique), e))
@@ -45,34 +46,34 @@ if __name__ == '__main__':
                 timestamp = time
                 e.process()
             
-            curr_block = witnessNodes[BlockGenIdx].blocktree[Block_under_vote][0]
+            curr_block = nodeList[witnessID].blocktree[BlkID][0] # Extract the block under voting
             curr_cycle_blocks.append(curr_block)
             
             if block_Votes >= numWitnessNodes*0.5:
                 curr_block.accepted = True
-                parNextBlock = Block_under_vote
-
-            BlockGenIdx = (BlockGenIdx + 1) % witnessNodes
+                parNextBlock = BlkID
 
         # Calculate local trust values
-        sat = np.zeros((number_of_peers,number_of_peers))
+        sat = np.zeros((number_of_peers, number_of_peers))
         unsat = np.zeros((number_of_peers, number_of_peers))
         for block in curr_cycle_blocks:
-            for txn in block.txn[:-1]:
+            for txn in block.txns[:-1]:
                 tmp = txn.split()
                 sender, reciever, amount = int(tmp[1]), int(tmp[3]), int(tmp[4])
                 if reciever in nodeList[sender].neighbors:
                     if block.accepted:
-                        sat[sender,reciever]+=1
+                        sat[sender,reciever] += 1
                     else:
-                        unsat[sender,reciever]+=1
+                        unsat[sender,reciever] += 1
         
-        c = np.clip(sat - unsat,0)
-        c = c/np.sum(c,axis=1,keepdims=True)
-        m = c 
+        s = np.maximum(sat - unsat, 0)
+        with np.errstate(divide='ignore',invalid='ignore'):
+            c = s/np.sum(s, axis=1, keepdims=True)
+        m = c
+        
         while True:
-            m1 = np.matmul(m,m)
-            new_entries = np.fill_diagonal(m==0,False)
+            m1 = np.matmul(m, m)
+            new_entries = np.fill_diagonal(m==0, False)
             m[new_entries] = m1[new_entries]
             if any(new_entries) == False:
                 break

@@ -1,9 +1,11 @@
 from block import Block
 from globalVariables import *
+from events import *
 
 # Genesis Block is included in the blocktree of every peer during initialization
 # It is the first block being created, so it's ID is 0
 genesisBlock = Block(None, [], 0)
+genesisBlock.accepted = True
 
 class Peer:
     def __init__(self, id, neighbors):
@@ -27,35 +29,57 @@ class Peer:
         self.blocktree = {0: (genesisBlock, 0)}
 
         self.longestChainLeaf = 0 # the blkID of the leaf in the longest chain of this peer
-        self.longestChainLength = 0 # length of longest chain
+        # self.longestChainLength = 0 # length of longest chain
         
         # We may receive blocks whose parent is not yet present in the blocktree. They are stored as 
         # parentBlkID: [(Block_1, arrivalTime_1), (Block_2, arrivalTime_2), ...]
         self.pendingBlocks = {}
     
-    def giveVote(self):
-        r = rng.random()
-        sum_gt = sum(global_trust_values)
-        p_gt, vote_id = 0, 0
-        for i in range(len(global_trust_values)):
-            p_gt += global_trust_values[i]/sum_gt
-            if r <= p_gt:
-                vote_id = i
-                break
-        return vote_id
 
+    def getBalance(self):
+        return self.allBalances[self.id]
+
+    # Broadcast txn to neighbors of a peer
+    def broadcastTxnToNeighbors(self, time, txn):
+        for p in self.neighbors:
+            neighbor = nodeList[p]
+
+            # latency generated as described in problem statement, |m| = 1 KB = 8*1024 bits as size of txn is fixed
+            c_ij = 100
+            d_ij = rng.exponential(96/(1024*c_ij))
+            latency = rho_ij + 8/(1024*c_ij) + d_ij
+
+            recTime = time + latency 
+            pq.put((recTime, next(unique), ReceiveTransaction(recTime, neighbor.id, txn)))
+
+    # Broadcast block to neighbors of a peer
+    def broadcastBlockToNeighbors(self, time, block):
+        for p in self.neighbors:
+            neighbor = nodeList[p]
+
+            # latency generated as described in problem statement, |m| = numTxns * 1KB = numTxns*8*1024 bits as size of txn is fixed
+            c_ij = 100
+            d_ij = rng.exponential(96/(1024*c_ij))
+            latency = rho_ij + 8*len(block.txns)/(1024*c_ij) + d_ij
+
+            recTime = time + latency
+            pq.put((recTime, next(unique), ReceiveBlock(recTime, neighbor.id, block, self.id)))
+            
     # Given list of txns in a block, update balances stored by the peer
     def updateBalances(self, txns):
         for txn in txns[:-1]:
             tmp = txn.split()
-            sender, reciever, amount = int(tmp[1]), int(tmp[3]), int(tmp[4])
+            try:
+                sender, reciever, amount = int(tmp[1]), int(tmp[3]), int(tmp[4])
+            except Exception as e:
+                print(e, txn)
             self.allBalances[sender] -= amount
             self.allBalances[reciever] += amount
         # Last Txn is coinbase so updated seperately
         self.allBalances[int(txns[-1].split()[1])] += 50
     
     # Verify the block if block.parent is accepted; adds the block in the chain
-    def AddBlock(self, block, arrivalTime):
+    def VerifyAddBlock(self, block, arrivalTime):
         assert(self.blocktree[block.parent][0].accepted)
 
         allBalances = self.allBalances[:] # Create a copy so original values do not get changed if block is invalid
@@ -63,7 +87,7 @@ class Peer:
 
         if block.parent != self.longestChainLeaf:
             chain = [] # This will store the chain
-            currBlock = block.parent
+            currBlock = peer.blocktree[block.parent][0]
             while currBlock.id != 0: # run loop until we reach genesis block
                 chain.append(currBlock) # add block to chain
                 currBlock = peer.blocktree[currBlock.parent][0] # set currBlock to parent of currBlock
@@ -115,6 +139,8 @@ class Peer:
             self.longestChainLeaf = block.id # Update longest chain leaf
             return True
 
+    def giveVote(self):
+        return np.random.choice(number_of_peers, p=global_trust_values/np.sum(global_trust_values))
 
 # Add peers to nodeList
 for p in range(number_of_peers):
