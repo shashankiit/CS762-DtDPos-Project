@@ -59,15 +59,14 @@ class Peer:
     # Given list of txns in a block, update balances stored by the peer
     def updateBalances(self, txns):
         for txn in txns[:-1]:
-            tmp = txn.split()
             try:
-                sender, reciever, amount = int(tmp[1]), int(tmp[3]), int(tmp[4])
+                sender, reciever, amount = txn.sender_id, txn.receiver_id, txn.coins
             except Exception as e:
                 print(e, txn)
             self.allBalances[sender] -= amount
             self.allBalances[reciever] += amount
         # Last Txn is coinbase so updated seperately
-        self.allBalances[int(txns[-1].split()[1])] += 50
+        self.allBalances[int(txns[-1].sender_id)] += 50
     
     # Verify the block if block.parent is accepted; adds the block in the chain
     def VerifyAddBlock(self, block, arrivalTime):
@@ -91,21 +90,18 @@ class Peer:
             # Now we traverse the chain and modify txnpool and allBalances as we go on to verify the new block
             for anc_block in chain:
                 for txn in anc_block.txns[:-1]: # For all txns except coinbase in block
-                    tmp = txn.split()
-                    txnID, sender, receiver, amount = int(tmp[0][:-1]), int(tmp[1]), int(tmp[3]), int(tmp[4])
+                    txnID, sender, receiver, amount = txn.txn_id, txn.sender_id, txn.receiver_id, txn.coins
                     txnpool[txnID] = (1, txn) # mark txn as used
                     allBalances[sender] -= amount # update sender balance
                     allBalances[receiver] += amount # update receiver balance
                     
                 # Handle coinbase seperately, no need to add coinbase in txnpool
-                tmp = anc_block.txns[-1].split()
-                txnID, receiver = int(tmp[0][:-1]), int(tmp[1])
+                txnID, receiver = anc_block.txns[-1].txn_id, anc_block.txns[-1].sender_id
                 allBalances[receiver] += 50
             
         # No need to verify coinbase as it only increments balance of a peer
         for txn in block.txns[:-1]:
-            tmp = txn.split()
-            txnID, sender, receiver, amount = int(tmp[0][:-1]), int(tmp[1]), int(tmp[3]), int(tmp[4])
+            txnID, sender, receiver, amount = txn.txn_id, txn.sender_id, txn.receiver_id, txn.coins
             if sender < 0 or sender >= number_of_peers or receiver < 0 or receiver >= number_of_peers or txnID < 0 or amount < 0:
                 return False
             # if txn is already present in current chain, discard the block
@@ -120,8 +116,7 @@ class Peer:
                 allBalances[receiver] += amount # add amount in receiver's balance
             
         # Handle coinbase seperately
-        tmp = block.txns[-1].split()
-        txnID, receiver = int(tmp[0][:-1]), int(tmp[1])
+        txnID, receiver = block.txns[-1].txn_id, block.txns[-1].sender_id
         allBalances[receiver] += 50
 
         self.blocktree[block.id] = (block, arrivalTime) # Add block in blocktree

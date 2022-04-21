@@ -15,7 +15,7 @@ if __name__ == '__main__':
     genesisBlock = Block(None, [], 0)
     genesisBlock.accepted = True
     
-    invalidTxnProbList = [0.9 if (x+1)%5==0 else 0 for x in range(number_of_peers)]
+    invalidTxnProbList = [0 if (x+1)%5==0 else 0 for x in range(number_of_peers)]
     # Add peers to nodeList
     for p in range(number_of_peers):
         peer = Peer(p, G[p], genesisBlock, 0)
@@ -33,9 +33,10 @@ if __name__ == '__main__':
 
         # amount (int) can be from 0 (inclusive) to the balance of that peer (inclusive) in the longest chain stored in the peer
         amount = rng.integers(0, sender.getBalance()+1) if sender.getBalance() > 0 else 0
-        pq.put((0, next(unique), GenerateTransaction(timestamp, sender.id, receiverID, amount)))
+        pq.put((0, next(unique), GenerateTransaction(timestamp, sender.id, receiverID, amount, False)))
     
-    plotPeerList = [3, 7, 9, 14, 19] # Peers to plot trust values
+    # plotPeerList = [3, 7, 9, 14, 19] # Peers to plot trust values
+    plotPeerList = list(range(number_of_peers))
     peerGlobalTrustValues = np.zeros((numElectionCycles + 1, len(plotPeerList)))
     peerGlobalTrustValues[0, :] = np.array([global_trust_values[x] for x in plotPeerList])
     
@@ -85,35 +86,34 @@ if __name__ == '__main__':
             invalid_txns = BlockTree.VerifyAddBlock(block) # returns list of invalid txns
 
             for txn in block.txns[:-1]:
-                tmp = txn.split()
-                txnID, sender, receiver, amount = int(tmp[0][:-1]), int(tmp[1]), int(tmp[3]), int(tmp[4])
+                txnID, sender, receiver, amount = txn.txn_id, txn.sender_id, txn.receiver_id, txn.coins
                 if receiver in nodeList[sender].neighbors:
-                    if  txnID in invalid_txns:
+                    if txnID in invalid_txns:
                         unsat[sender,receiver] += 1
                     else:
                         sat[sender,receiver] += 1
         
         s = np.maximum(sat - unsat, 0)
-        c = s/np.maximum(np.sum(s, axis=1, keepdims=True),1e-3)
+        c = s/np.sum(s, axis=1, keepdims=True)
         m = c
-        
         while True:
             m1 = np.matmul(m, m)
             new_entries = (m==0)
             np.fill_diagonal(new_entries, False)
             m[new_entries] = m1[new_entries]
+            m = m/np.sum(m, axis=1, keepdims=True)
             if new_entries.any() == False:
                 break
             if (m1[new_entries] == 0).all():
                 break
         global_trust_values = m.T@global_trust_values
-
-        norm_trust_values = np.array(global_trust_values)/max(np.sum(np.array(global_trust_values)),1e-3)
-        peerGlobalTrustValues[electionIdx + 1, :] = np.array([norm_trust_values[x] for x in plotPeerList])
+        print(np.sum(global_trust_values))
+        # norm_trust_values = np.array(global_trust_values)/max(np.sum(np.array(global_trust_values)),1e-3)
+        peerGlobalTrustValues[electionIdx + 1, :] = np.array([global_trust_values[x] for x in plotPeerList])
 
     plt.figure()
     for p_idx in range(len(plotPeerList)):
-        plt.plot(np.arange(numElectionCycles + 1), peerGlobalTrustValues[:, p_idx], label = f'Peer {plotPeerList[p_idx]}', marker=".", markersize=20)
+        plt.plot(np.arange(numElectionCycles + 1), peerGlobalTrustValues[:, p_idx], label = f'Peer {plotPeerList[p_idx]}', marker=".", markersize=10)
     plt.xticks(np.arange(numElectionCycles + 1), np.arange(numElectionCycles + 1, dtype=int))
     plt.legend()
     plt.show()
