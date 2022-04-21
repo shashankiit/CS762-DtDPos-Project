@@ -8,6 +8,4 @@ class Block:
         self.txns = txns # List of Txns (with coinbase as last entry)
         self.broadcastTime = broadcastTime # Time at which block was mined and broadcasted
         self.accepted=False  # Voting is succesful
-        self.underVote = False # Voting for the block is underway
-        self.miningTime = None # Time when the block is mined
         self.votes = 0

@@ -7,7 +7,7 @@ class Peer:
         self.id = id # unique id of each peer
         self.neighbors = neighbors # The ids of neighbors of this peer
         self.invalidTxnProb = invalidTxnProb
-        
+        self.localTrustValues = np.ones((number_of_peers,))/number_of_peers
         # Each node maintains balances of each peer
         self.allBalances = [10 for id in range(number_of_peers)]
 
@@ -126,4 +126,4 @@ class Peer:
         return True
 
     def giveVote(self):
-        return rng.choice(number_of_peers, p=global_trust_values/np.sum(global_trust_values))
+        return rng.choice(number_of_peers, p=self.localTrustValues/np.sum(self.localTrustValues))

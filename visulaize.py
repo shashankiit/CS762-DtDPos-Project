@@ -51,13 +51,16 @@ def drawGraph(tree, leaf, filename):
     plt.close()
 
 # To visualize how peers are connected
-def plotPeerGraph(graph):
+def plotPeerGraph(graph, malicious_nodes):
     nxG = nx.Graph()
     labels = {}
     for i in range(len(graph)):
         for j in graph[i]:
             nxG.add_edge(i,j)
         labels[i] = i
+    colors = ['#1f78b4' for i in range(len(graph))]
+    for i in malicious_nodes:
+        colors[i] = '#ff0000'
     plt.figure()
-    nx.draw_kamada_kawai(nxG, nodelist=list(range(len(graph))), labels=labels)
+    nx.draw_kamada_kawai(nxG, nodelist=list(range(len(graph))), labels=labels, node_color=colors)
     plt.show()
