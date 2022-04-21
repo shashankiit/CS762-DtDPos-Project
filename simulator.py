@@ -1,4 +1,3 @@
-from torch import alpha_dropout
 from globalVariables import *
 from peer import Peer
 from block import Block
