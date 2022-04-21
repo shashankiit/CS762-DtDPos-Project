@@ -11,7 +11,6 @@ witnessNodes = [] # set of witness nodes
 numElectionCycles = 10
 peerSleepBeta = 0.5 # mean of interarrival time of transactions
 timeforVote = 20 # Per block in election cycle
-# meanT_k = [10 for i in range(number_of_peers)]
 loggingTxn = False
 loggingBlock = False
 rho_ij = 0.01 + (0.5 - 0.01)*rng.random() # Value of speed of light propagation delay, chosen at beginning of simulation

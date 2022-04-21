@@ -59,14 +59,11 @@ class Peer:
     # Given list of txns in a block, update balances stored by the peer
     def updateBalances(self, txns):
         for txn in txns[:-1]:
-            try:
-                sender, reciever, amount = txn.sender_id, txn.receiver_id, txn.coins
-            except Exception as e:
-                print(e, txn)
+            sender, reciever, amount = txn.sender_id, txn.receiver_id, txn.coins
             self.allBalances[sender] -= amount
             self.allBalances[reciever] += amount
         # Last Txn is coinbase so updated seperately
-        self.allBalances[int(txns[-1].sender_id)] += 50
+        self.allBalances[txns[-1].sender_id] += 50
     
     # Verify the block if block.parent is accepted; adds the block in the chain
     def VerifyAddBlock(self, block, arrivalTime):
@@ -86,7 +83,7 @@ class Peer:
             
             for txnID in txnpool:
                 txnpool[txnID] = (0, txnpool[txnID][1]) # mark all txns as unused
-            allBalances = [0 for id in range(number_of_peers)] # set all balances to 0
+            allBalances = [10 for id in range(number_of_peers)] # set all balances to 0
             # Now we traverse the chain and modify txnpool and allBalances as we go on to verify the new block
             for anc_block in chain:
                 for txn in anc_block.txns[:-1]: # For all txns except coinbase in block
