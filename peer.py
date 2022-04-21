@@ -7,10 +7,6 @@ class Peer:
         self.id = id # unique id of each peer
         self.neighbors = neighbors # The ids of neighbors of this peer
         self.invalidTxnProb = 0.1
-        self.localTrustValues = [0 for i in range(number_of_peers)]
-
-        # self.numValidTxns = [0 for i in range(number_of_peers)]
-        # self.numInvalidTxns = [0 for i in range(number_of_peers)]
         
         # Each node maintains balances of each peer
         self.allBalances = [10 for id in range(number_of_peers)]

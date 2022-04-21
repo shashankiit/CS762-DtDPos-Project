@@ -39,10 +39,10 @@ class Blockchain:
 
         if block.parent != self.longestChainLeaf:
             chain = [] # This will store the chain
-            currBlock = self.blocktree[block.parent][0]
+            currBlock = self.blocktree[block.parent]
             while currBlock.id != 0: # run loop until we reach genesis block
                 chain.append(currBlock) # add block to chain
-                currBlock = self.blocktree[currBlock.parent][0] # set currBlock to parent of currBlock
+                currBlock = self.blocktree[currBlock.parent] # set currBlock to parent of currBlock
             chain = list(reversed(chain)) # we need to reverse it as we were adding child earlier than parent
             
             for txnID in txnpool:

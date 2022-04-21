@@ -10,10 +10,9 @@ if __name__ == '__main__':
 
     # Genesis Block is included in the blocktree of every peer during initialization
     # It is the first block being created, so it's ID is 0
-    print("Hello", Block.BlkID)
     genesisBlock = Block(None, [], 0)
     genesisBlock.accepted = True
-    print("Hello", Block.BlkID)
+    
     # Add peers to nodeList
     for p in range(number_of_peers):
         peer = Peer(p, G[p], genesisBlock)
@@ -78,14 +77,10 @@ if __name__ == '__main__':
                 tmp = txn.split()
                 txnID, sender, receiver, amount = int(tmp[0][:-1]), int(tmp[1]), int(tmp[3]), int(tmp[4])
                 if receiver in nodeList[sender].neighbors:
-                    try:
-                        if  txnID in invalid_txns:
-                            sat[sender,receiver] += 1
-                        else:
-                            unsat[sender,receiver] += 1
-                    except Exception as e:
-                        print(e, txnID, invalid_txns)
-                        # txnID = alph
+                    if  txnID in invalid_txns:
+                        sat[sender,receiver] += 1
+                    else:
+                        unsat[sender,receiver] += 1
         
         s = np.maximum(sat - unsat, 0)
         with np.errstate(divide='ignore',invalid='ignore'):
@@ -94,11 +89,12 @@ if __name__ == '__main__':
         
         while True:
             m1 = np.matmul(m, m)
-            new_entries = np.fill_diagonal(m==0, False)
+            new_entries = (m==0)
+            np.fill_diagonal(new_entries, False)
             m[new_entries] = m1[new_entries]
-            if any(new_entries) == False:
+            if new_entries.any() == False:
                 break
-            if np.all(m1[new_entries] == 0):
+            if (m1[new_entries] == 0).all():
                 break
         global_trust_values = m.T@global_trust_values
     
