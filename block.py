@@ -10,3 +10,4 @@ class Block:
         self.accepted=False  # Voting is succesful
         self.underVote = False # Voting for the block is underway
         self.miningTime = None # Time when the block is mined
+        self.votes = 0

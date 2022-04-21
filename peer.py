@@ -1,12 +1,12 @@
 from block import Block
 from globalVariables import *
-from events import *
+from Events import *
 
 class Peer:
-    def __init__(self, id, neighbors, genesisBlock):
+    def __init__(self, id, neighbors, genesisBlock, invalidTxnProb):
         self.id = id # unique id of each peer
         self.neighbors = neighbors # The ids of neighbors of this peer
-        self.invalidTxnProb = 0.1
+        self.invalidTxnProb = invalidTxnProb
         
         # Each node maintains balances of each peer
         self.allBalances = [10 for id in range(number_of_peers)]
@@ -75,8 +75,9 @@ class Peer:
 
         allBalances = self.allBalances[:] # Create a copy so original values do not get changed if block is invalid
         txnpool = self.txnpool.copy() # Create a copy so original values do not get changed if block is invalid
-
+        
         if block.parent != self.longestChainLeaf:
+
             chain = [] # This will store the chain
             currBlock = self.blocktree[block.parent][0]
             while currBlock.id != 0: # run loop until we reach genesis block
@@ -101,7 +102,6 @@ class Peer:
                 txnID, receiver = int(tmp[0][:-1]), int(tmp[1])
                 allBalances[receiver] += 50
             
-
         # No need to verify coinbase as it only increments balance of a peer
         for txn in block.txns[:-1]:
             tmp = txn.split()
@@ -131,4 +131,4 @@ class Peer:
         return True
 
     def giveVote(self):
-        return np.random.choice(number_of_peers, p=global_trust_values/np.sum(global_trust_values))
+        return rng.choice(number_of_peers, p=global_trust_values/np.sum(global_trust_values))

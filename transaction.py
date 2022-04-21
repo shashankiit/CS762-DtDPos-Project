@@ -8,12 +8,13 @@ class Transaction:
     '''
     txn_count = 0
     
-    def __init__(self, sender_id, receiver_id, coins):
+    def __init__(self, sender_id, receiver_id, coins, isinvalid):
         self.txn_id = Transaction.txn_count
         Transaction.txn_count += 1
         self.sender_id = sender_id
         self.receiver_id = receiver_id
         self.coins = coins
+        self.isinvalid = isinvalid
 
     def is_coinbase_txn(self):
         return (self.sender_id is None)

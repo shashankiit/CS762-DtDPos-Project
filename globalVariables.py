@@ -11,11 +11,9 @@ witnessNodes = [] # set of witness nodes
 numElectionCycles = 5
 peerSleepBeta = 0.5 # mean of interarrival time of transactions
 timeforVote = 20 # Per block in election cycle
-parNextBlock = None # Parent of next block to be generated
 # meanT_k = [10 for i in range(number_of_peers)]
 loggingTxn = False
 loggingBlock = False
-block_Votes = 0 # votes for the current block in circulation
 rho_ij = 0.01 + (0.5 - 0.01)*rng.random() # Value of speed of light propagation delay, chosen at beginning of simulation
 
 # Do DFS on a undirected graph given as adjacency list
@@ -44,6 +42,11 @@ def generateRandomGraph(n):
                     G[j].append(i)
         if isConnected(G, n):
             return G
+
+def changeWitnessNodes(new_list):
+    global witnessNodes
+    witnessNodes.clear()
+    witnessNodes.extend(new_list[:])
 
 G = generateRandomGraph(number_of_peers) # Peer Graph
 nodeList = [] # Stores all the Peers

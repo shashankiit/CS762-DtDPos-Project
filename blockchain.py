@@ -1,6 +1,6 @@
 from block import Block
 from globalVariables import *
-from events import *
+from Events import *
 
 class Blockchain:
     def __init__(self, id, genesisBlock):
@@ -85,6 +85,7 @@ class Blockchain:
                 allBalances[receiver] += amount # add amount in receiver's balance
         
         if len(invalid_txns) > 0:
+            self.blocktree[block.id] = block
             return invalid_txns
 
         # Handle coinbase seperately

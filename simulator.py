@@ -1,21 +1,24 @@
+from cProfile import label
 from globalVariables import *
 from peer import Peer
 from block import Block
-from events import GenerateTransaction, GenerateBlock, random_choice_except
+from Events import GenerateTransaction, GenerateBlock, random_choice_except
 from visulaize import drawGraph, plotPeerGraph, graphFromBlockTree, getNodeLabels
 import os, shutil
 from blockchain import Blockchain
+import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-
+    # plotPeerGraph(G)
     # Genesis Block is included in the blocktree of every peer during initialization
     # It is the first block being created, so it's ID is 0
     genesisBlock = Block(None, [], 0)
     genesisBlock.accepted = True
     
+    invalidTxnProbList = [0.9 if (x+1)%5==0 else 0 for x in range(number_of_peers)]
     # Add peers to nodeList
     for p in range(number_of_peers):
-        peer = Peer(p, G[p], genesisBlock)
+        peer = Peer(p, G[p], genesisBlock, 0)
         nodeList.append(peer)
         global_trust_values.append(1/number_of_peers)
 
@@ -32,22 +35,26 @@ if __name__ == '__main__':
         amount = rng.integers(0, sender.getBalance()+1) if sender.getBalance() > 0 else 0
         pq.put((0, next(unique), GenerateTransaction(timestamp, sender.id, receiverID, amount)))
     
-
+    plotPeerList = [3, 7, 9, 14, 19] # Peers to plot trust values
+    peerGlobalTrustValues = np.zeros((numElectionCycles + 1, len(plotPeerList)))
+    peerGlobalTrustValues[0, :] = np.array([global_trust_values[x] for x in plotPeerList])
+    
     # Conduct numElectionCycles for simulation
     for electionIdx in range(numElectionCycles):
-
+        print(f'\n*******************\nElection Cycle #: {electionIdx + 1}')
         # Voting in current Election Cycle
         votes = np.zeros((number_of_peers,))
         for peer in nodeList:
             votes[peer.giveVote()] += peer.getBalance() # Vote is proportional to stake
-        witnessNodes = np.argsort(votes)[-numWitnessNodes:] # Choose witnessNodes
-        
+        witnessNodesList = list(np.argsort(votes)[-numWitnessNodes:]) # Choose witnessNodes
+        changeWitnessNodes(witnessNodesList)
+        print(f'Selected Witness Nodes: {witnessNodes}\n')
         # Witness nodes start generating blocks
         curr_cycle_blocks = []
         
         for i in range(roundNumBlocks):
-            block_Votes = 0 # Number of votes for block to be generated
             witnessID = witnessNodes[i%numWitnessNodes] # ID of the witness node generating blocks
+            print(f'\nPeer {witnessID} attempting to generate block')
             pq.put((timestamp, next(unique), GenerateBlock(timestamp, witnessID, parNextBlock)))
             
             endtime = timestamp + timeforVote # Time for voting
@@ -63,10 +70,14 @@ if __name__ == '__main__':
             curr_block = nodeList[witnessID].blocktree[Block.BlkID][0] # Extract the block under voting
             curr_cycle_blocks.append(curr_block)
             
-            if block_Votes >= numWitnessNodes*0.5:
+            if curr_block.votes >= numWitnessNodes*0.5:
+                print(f'Block {Block.BlkID} received {curr_block.votes} votes, hence accepted!')
                 curr_block.accepted = True
                 parNextBlock = Block.BlkID
+            else:
+                print(f'Block {Block.BlkID} received {curr_block.votes} votes, hence rejected!')
 
+        print('\nUpdating trust values ...')
         # Calculate local trust values
         sat = np.zeros((number_of_peers, number_of_peers))
         unsat = np.zeros((number_of_peers, number_of_peers))
@@ -78,13 +89,12 @@ if __name__ == '__main__':
                 txnID, sender, receiver, amount = int(tmp[0][:-1]), int(tmp[1]), int(tmp[3]), int(tmp[4])
                 if receiver in nodeList[sender].neighbors:
                     if  txnID in invalid_txns:
-                        sat[sender,receiver] += 1
-                    else:
                         unsat[sender,receiver] += 1
+                    else:
+                        sat[sender,receiver] += 1
         
         s = np.maximum(sat - unsat, 0)
-        with np.errstate(divide='ignore',invalid='ignore'):
-            c = s/np.sum(s, axis=1, keepdims=True)
+        c = s/np.maximum(np.sum(s, axis=1, keepdims=True),1e-3)
         m = c
         
         while True:
@@ -97,6 +107,16 @@ if __name__ == '__main__':
             if (m1[new_entries] == 0).all():
                 break
         global_trust_values = m.T@global_trust_values
+
+        norm_trust_values = np.array(global_trust_values)/max(np.sum(np.array(global_trust_values)),1e-3)
+        peerGlobalTrustValues[electionIdx + 1, :] = np.array([norm_trust_values[x] for x in plotPeerList])
+
+    plt.figure()
+    for p_idx in range(len(plotPeerList)):
+        plt.plot(np.arange(numElectionCycles + 1), peerGlobalTrustValues[:, p_idx], label = f'Peer {plotPeerList[p_idx]}', marker=".", markersize=20)
+    plt.xticks(np.arange(numElectionCycles + 1), np.arange(numElectionCycles + 1, dtype=int))
+    plt.legend()
+    plt.show()
     
     
     # ---------------------
